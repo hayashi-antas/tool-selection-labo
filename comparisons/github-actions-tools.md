@@ -11,6 +11,14 @@ Rails + Vite + Docker + GitHub Actionsを前提に、効果が大きいものだ
 
 ## これらと役割が被らない、追加してみたツール
 
+1. [**OSV Scanner** … 依存関係](#1-osv-scannergoogle)
+2. [**Semgrep** … ソースコード SAST](#2-semgrepreturntocorp)
+3. [**OSSF Scorecard** … リポジトリ運用](#3-ossf-scorecardopenssf)
+4. [**Trivy** … コンテナイメージの脆弱性](#4-trivyaqua-security)
+5. [**Hadolint** … Dockerfile のベストプラクティス](#5-haskell-dockerfile-linter-hadolint)
+
+---
+
 ### 1. **OSV Scanner**（Google）
 
 - **役割**: 依存関係の脆弱性スキャン（OSV データベース使用）
@@ -19,17 +27,7 @@ Rails + Vite + Docker + GitHub Actionsを前提に、効果が大きいものだ
 - **導入**: ワークフロー 1 本追加するだけ。ビルド不要
 
 
-### 2. **Trivy**（Aqua Security）
-
-- **役割**: コンテナイメージの脆弱性スキャン（OS パッケージ + 言語依存関係）
-- **対象**: Dockerfile からビルドしたイメージ
-- **特徴**: 無料・OSS。**本番で使うイメージを push 前にスキャン**するのに向いている
-- **導入**: イメージをビルドするタイミング（例: Fly デプロイ前や専用ワークフロー）で `trivy image` を実行
-
-既に **CodeQL / Brakeman / Dependabot** で「ソース＋依存」は見ているので、**コンテナ層**を Trivy でカバーする。
-
-
-### 3. **Semgrep**（Returntocorp）
+### 2. **Semgrep**（Returntocorp）
 
 - **役割**: ルールベースの SAST（バグ・脆弱性・コーディング規約）
 - **対象**: Ruby, JavaScript, TypeScript など
@@ -39,12 +37,30 @@ Rails + Vite + Docker + GitHub Actionsを前提に、効果が大きいものだ
 「CodeQL や Brakeman と重複するのでは？」という点は、ルールが違うので**併用**で問題ありません（アラートが増えすぎたらルールを絞る運用でよいです）。
 
 
-### 4. **OSSF Scorecard**（OpenSSF）
+### 3. **OSSF Scorecard**（OpenSSF）
 
 - **役割**: リポジトリの**サプライチェーン・運用の健全性**をスコアリング（ブランチ保護、署名、依存関係の更新など）
 - **対象**: リポジトリ全体（言語非依存）
 - **特徴**: 無料・OSS。**設定や運用の穴**をチェックしたいときに便利
 - **導入**: 公式の Scorecard Action を週次などで 1 回実行するワークフローを追加
+
+
+### 4. **Trivy**（Aqua-Security）
+
+- **役割**: コンテナイメージの脆弱性スキャン（OS パッケージ + 言語依存関係）
+- **対象**: Dockerfile からビルドしたイメージ
+- **特徴**: 無料・OSS。**本番で使うイメージを push 前にスキャン**するのに向いている
+- **導入**: イメージをビルドするタイミング（例: Fly デプロイ前や専用ワークフロー）で `trivy image` を実行
+
+既に **CodeQL / Brakeman / Dependabot** で「ソース＋依存」は見ているので、**コンテナ層**を Trivy でカバーする。
+
+
+### 5. **Haskell Dockerfile Linter (hadolint)**
+
+- **役割**: Dockerfile の**ベストプラクティス・構文チェック**（Best practices for Dockerfiles に基づく）
+- **対象**: Dockerfile
+- **特徴**: 無料・OSS。Trivy はイメージの脆弱性スキャン、hadolint は **Dockerfile の書き方**（レイヤー効率、セキュリティ推奨など）をチェックするので役割が異なる
+- **導入**: hadolint-action で Dockerfile を解析し、SARIF 形式で Code scanning にアップロードするワークフローを追加
 
 ---
 
@@ -55,7 +71,6 @@ Rails + Vite + Docker + GitHub Actionsを前提に、効果が大きいものだ
 | **Snyk** | 依存関係・コンテナ・IaC | 依存関係＋コンテナを 1 ツールでまとめたい、無料枠で試したい |
 | **Bearer** | SAST + 秘密・PII 検出 | 秘密情報や個人データの扱いをコードでチェックしたい |
 | **Dependency Review**（GitHub 標準） | PR での依存関係変更の差分チェック | Dependabot の PR をマージする前に「何が変わったか」を見たい |
-| **Haskell Dockerfile Linter (hadolint)** | Dockerfile のベストプラクティス | Dockerfile の書き方をもう少し厳しくしたい |
 
 
 [![Image from Gyazo](https://i.gyazo.com/327763dda3e02a94ce47558ee9b2b7dd.png)](https://gyazo.com/327763dda3e02a94ce47558ee9b2b7dd)
