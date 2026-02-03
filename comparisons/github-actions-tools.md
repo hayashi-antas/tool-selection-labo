@@ -38,7 +38,6 @@ Rails + Vite + Docker + GitHub Actionsを前提に、効果が大きいものだ
 
 「CodeQL や Brakeman と重複するのでは？」という点は、ルールが違うので**併用**で問題ありません（アラートが増えすぎたらルールを絞る運用でよいです）。
 
----
 
 ### 4. **OSSF Scorecard**（OpenSSF）
 
