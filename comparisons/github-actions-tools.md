@@ -98,6 +98,7 @@ Dependabot の PR をマージしたあと、その状態で `bundle install` �
 | **Bearer** | SAST + 秘密・PII 検出 | 秘密情報や個人データの扱いをコードでチェックしたい |
 | **Dependency Review**（GitHub 標準） | PR での依存関係変更の差分チェック | Dependabot の PR をマージする前に「何が変わったか」を見たい |
 
+## サンプル画面
 
 [![Image from Gyazo](https://i.gyazo.com/327763dda3e02a94ce47558ee9b2b7dd.png)](https://gyazo.com/327763dda3e02a94ce47558ee9b2b7dd)
 
