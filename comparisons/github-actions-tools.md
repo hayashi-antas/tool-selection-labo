@@ -11,15 +11,34 @@ Rails + Vite + Docker + GitHub Actionsを前提に、効果が大きいものだ
 
 ## これらと役割が被らない、追加してみたツール
 
-1. [**OSV Scanner** … 依存関係](#1-osv-scannergoogle)
-2. [**Semgrep** … ソースコード SAST](#2-semgrepreturntocorp)
-3. [**OSSF Scorecard** … リポジトリ運用](#3-ossf-scorecardopenssf)
-4. [**Trivy** … コンテナイメージの脆弱性](#4-trivyaqua-security)
-5. [**Hadolint** … Dockerfile のベストプラクティス](#5-haskell-dockerfile-linter-hadolint)
+1. [**Gemfile 非推奨チェック** … Bundler deprecation ガード](#1-gemfile-非推奨チェックお手製)
+2. [**OSV Scanner** … 依存関係](#2-osv-scannergoogle)
+3. [**Semgrep** … ソースコード SAST](#3-semgrepreturntocorp)
+4. [**OSSF Scorecard** … リポジトリ運用](#4-ossf-scorecardopenssf)
+5. [**Trivy** … コンテナイメージの脆弱性](#5-trivyaqua-security)
+6. [**Hadolint** … Dockerfile のベストプラクティス](#6-haskell-dockerfile-linter-hadolint)
 
 ---
 
-### 1. **OSV Scanner**（Google）
+### 1. **Gemfile 非推奨チェック**（お手製）
+
+- **役割**: `bundle install` の出力に Bundler の `[DEPRECATED]` が出ていないかを CI で検証する
+- **対象**: Gemfile / Gemfile.lock（Bundler が非推奨と判断する書き方・依存の組み合わせ）
+- **特徴**: `bin/check-gemfile-deprecations` で実行。Dependabot は「更新の提案」、このジョブは「現状のコードが非推奨を出さないかのガード」なので**役割は被らない**
+- **導入**: CI に `gemfile_deprecations` ジョブを追加し、`bin/check-gemfile-deprecations` を実行
+
+**Dependabot との比較**
+
+| | Gemfile 非推奨ジョブ | Dependabot |
+|---|------------------------|------------|
+| 役割 | 現状の Gemfile が Bundler の deprecation を出さないかチェック | 依存の更新・セキュリティ更新の PR を出す |
+| きっかけ | 毎回の CI（push/PR） | 日次スケジュール |
+| 結果 | 非推奨が出たら CI 失敗 | 更新可能なら PR 作成 |
+
+Dependabot の PR をマージしたあと、その状態で `bundle install` すると非推奨が出る場合、非推奨ジョブが失敗して「その更新の仕方には問題がある」と教えてくれる**補完関係**になる。
+
+
+### 2. **OSV Scanner**（Google）
 
 - **役割**: 依存関係の脆弱性スキャン（OSV データベース使用）
 - **対象**: Ruby（Gemfile）、JavaScript/TypeScript（package.json）など
@@ -27,7 +46,7 @@ Rails + Vite + Docker + GitHub Actionsを前提に、効果が大きいものだ
 - **導入**: ワークフロー 1 本追加するだけ。ビルド不要
 
 
-### 2. **Semgrep**（Returntocorp）
+### 3. **Semgrep**（Returntocorp）
 
 - **役割**: ルールベースの SAST（バグ・脆弱性・コーディング規約）
 - **対象**: Ruby, JavaScript, TypeScript など
@@ -37,7 +56,7 @@ Rails + Vite + Docker + GitHub Actionsを前提に、効果が大きいものだ
 「CodeQL や Brakeman と重複するのでは？」という点は、ルールが違うので**併用**で問題ありません（アラートが増えすぎたらルールを絞る運用でよいです）。
 
 
-### 3. **OSSF Scorecard**（OpenSSF）
+### 4. **OSSF Scorecard**（OpenSSF）
 
 - **役割**: リポジトリの**サプライチェーン・運用の健全性**をスコアリング（ブランチ保護、署名、依存関係の更新など）
 - **対象**: リポジトリ全体（言語非依存）
@@ -45,7 +64,7 @@ Rails + Vite + Docker + GitHub Actionsを前提に、効果が大きいものだ
 - **導入**: 公式の Scorecard Action を週次などで 1 回実行するワークフローを追加
 
 
-### 4. **Trivy**（Aqua-Security）
+### 5. **Trivy**（Aqua Security）
 
 - **役割**: コンテナイメージの脆弱性スキャン（OS パッケージ + 言語依存関係）
 - **対象**: Dockerfile からビルドしたイメージ
@@ -55,7 +74,7 @@ Rails + Vite + Docker + GitHub Actionsを前提に、効果が大きいものだ
 既に **CodeQL / Brakeman / Dependabot** で「ソース＋依存」は見ているので、**コンテナ層**を Trivy でカバーする。
 
 
-### 5. **Haskell Dockerfile Linter (hadolint)**
+### 6. **Haskell Dockerfile Linter (hadolint)**
 
 - **役割**: Dockerfile の**ベストプラクティス・構文チェック**（Best practices for Dockerfiles に基づく）
 - **対象**: Dockerfile
