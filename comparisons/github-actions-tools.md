@@ -1,4 +1,4 @@
-Bokrium の構成（Rails + Vite + Docker + GitHub Actions）を前提に、**今の運用に足しやすく、効果が大きいもの**だけに絞っておすすめします。
+Rails + Vite + Docker + GitHub Actionsを前提に、効果が大きいものだけに絞って選定しています。
 
 ---
 
