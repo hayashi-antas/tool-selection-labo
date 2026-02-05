@@ -13,6 +13,7 @@
 - **RuboCop** … スタイル・品質。Ruby 向けの静的コードアナライザ兼フォーマッタで、Ruby Style Guide に沿ってコードスタイルや設計上の問題をチェックし、自動整形もできる。
 - **CodeQL** … Ruby / JS・TS / Actions。GitHub 製のコード解析エンジンで、Ruby や JavaScript/TypeScript などのコードをクエリ言語で解析し、脆弱性やバグを検出して code scanning アラートとして可視化できる。
 - **Dependabot** … bundler + npm + actions。GitHub の依存関係アップデート機能で、bundler や npm、GitHub Actions などのライブラリやアクションの新バージョン・脆弱性を監視し、自動で PR を立てて更新提案・自動マージまで行える。
+- **RSpec** … テスト。Ruby 向けの BDD スタイルのテストフレームワークで、モデル・コントローラ・リクエストなどアプリの振る舞いを仕様として記述し、CI で自動実行してリグレッションを防ぐ。**E2Eテスト**は RSpec の枠のなかで **Capybara** を使って書き、ブラウザ制御のドライバには Selenium ではなく **Playwright** を指定して実行を高速化している（RSpec → Capybara → Playwright の階層）。
 
 ## これらと役割が被らない、追加してみたツール
 
@@ -88,7 +89,22 @@ Dependabot の PR をマージしたあと、その状態で `bundle install` �
 
 ---
 
-## 状況に応じて検討
+## オプション
+
+### 他のツールと役割は重なるが、動作が軽く補完的に使えるため、任意で採用しているもの。
+
+- **bundler-audit** … 依存関係。Gemfile.lock を Ruby Advisory DB（ruby-advisory-db）と照合し、既知の CVE があれば CI で失敗させる。OSV Scanner と役割は一部重複するが、Ruby コミュニティがメンテナンスする ruby-advisory-db に基づく検査であり、データソースが異なる。動作が軽いため、OSV とは別の観点で二重チェックしたい場合のオプションとして入れておいてよい。
+
+| 観点          | bundle-audit だけ                  | OSV Scanner だけ                                | 両方使う場合の価値                                         |
+| ----------- | -------------------------------- | --------------------------------------------- | ------------------------------------------------- |
+| gem だけのスキャン | RubySec 特化型でシンプル                 | OSV DB 由来で Ruby はサポート                 | データベースが異なるため「片方だけ漏れ」を防げる                          |
+| 言語・エコシステム   | Ruby 限定                          | Ruby, Node.js, Python, Go など多言語          | Ruby プロジェクトなら、Ruby は両方でカバー                        |
+| 依存関係の深さ     | Gemfile.lock だけ                  | Gemfile.lock だけでなく SBOM / コンテナイメージのレイヤまでjit+1 | Ruby は bundle‑audit、他の言語やコンテナは OSV Scanner で分担できる |
+| データベース元     | RubySec / ruby‑advisory‑db | OSV DB（多言語 OSS 脆弱性データベース）      | 同じ Ruby gem でも、登録タイミングやアドバイス内容が微妙に違う場合がある         |
+
+---
+
+### 状況に応じて検討
 
 | ツール | 役割 | 入れるとよいケース |
 |--------|------|---------------------|
