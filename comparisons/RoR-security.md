@@ -434,3 +434,5 @@ Rails 8.1.2は以下のセキュリティ機能を標準で備えています：
 [^37]: [This Week in Rails - Default Regexp.timeout and more!](https://rubyonrails.org/2024/11/1/this-week-in-rails) - Rails 8 sets Regexp.timeout to 1 second by default for ReDoS mitigation.
 
 [^38]: [Rails 8.0 Release Notes](https://guides.rubyonrails.org/8_0_release_notes.html) - Regexp timeout default; ReDoS-related CVE history (e.g. MIME parsing, cookie parsing).
+
+<img src="https://r2cdn.perplexity.ai/pplx-full-logo-primary-dark%402x.png" style="height:64px;margin-right:32px"/>
