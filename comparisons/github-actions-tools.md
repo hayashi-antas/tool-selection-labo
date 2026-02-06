@@ -116,4 +116,101 @@ Dependabot の PR をマージしたあと、その状態で `bundle install` �
 
 [![Image from Gyazo](https://i.gyazo.com/327763dda3e02a94ce47558ee9b2b7dd.png)](https://gyazo.com/327763dda3e02a94ce47558ee9b2b7dd)
 
+## CIとAI自動レビューの流れ
+
+PR を作成すると次のような流れで CI と AI による自動レビューが動きます。
+
+1. **PR 作成**  
+   `main` 向けに PR を出すと、GitHub Actions がトリガーされます。
+
+2. **CI 実行**  
+   まず **CI**（`.github/workflows/ci.yml`）が走り、依存関係チェック（Gemfile 非推奨・bundler-audit）、Lint（RuboCop・Brakeman）、テスト（RSpec）が並列で実行されます。あわせて **Hadolint / OSV-Scanner / Semgrep / Trivy / Scorecard** などのセキュリティ系ワークフローも PR または push で動き、コード・依存・Dockerfile・コンテナイメージ・リポジトリ運用までを自動でチェックします。
+
+3. **AI 自動レビュー**  
+   CI の結果に加え、CodeRabbit・Bugbot・Codex などの AI レビューツールが PR の差分を解析し、設計・可読性・潜在バグ・セキュリティ観点でのコメントを付けます。人は「この指摘を直すか」「仕様として許容するか」といった判断に集中できます。
+
+4. **指摘への対応**  
+   - **指摘あり** … Agent が自動で修正案を出し、修正コミットを PR に載せることができます。その push で CI が再実行され、再度 AI レビューも走ります。指摘がなくなるまでこのループを回します。  
+   - **指摘なし** … レビューが APPROVED となり、ブランチ保護で求めている CI 通過と承認が揃えばマージ可能になります。
+
+5. **マージ**  
+   マージ後は、`main` への push に応じて Fly デプロイや R2 アセットアップロードなどが動きます（トリガー・パスは [github-actions.md](github-actions.md) のワークフロー一覧参照）。
+
+フローチャートでは、上記の「PR → CI → AI レビュー → 指摘ありなら Agent 修正・CI 再実行 → 指摘なしなら APPROVED → マージ」という一連の流れを整理しています。
+
+```mermaid
+graph LR
+    PR([PR作成]) --> CI1[CI実行<br/>Lint / RSpec / etc.]
+    
+    CI1 --> AR[自動レビュー<br/>CodeRabbit / Bugbot / Codex]
+    
+    AR --> Review{指摘あり?}
+
+    Review -- Yes --> Agent[Agent 自動修正]
+    Agent --> Commit[修正コミット]
+    Commit --> CI2[CI再実行]
+    
+    %% 再実行からレビューへ
+    CI2 --> AR
+
+    Review -- No --> Approved[APPROVED<br/>マージ可能]
+    Approved --> Merged([マージ完了])
+
+    %% スタイリングでメリハリを
+    style PR fill:#f9f,stroke:#333
+    style CI1 fill:#e1f5fe,stroke:#01579b
+    style CI2 fill:#e1f5fe,stroke:#01579b,stroke-dasharray: 5 5
+    style Review fill:#fff4dd,stroke:#d4a017
+    style Merged fill:#00ff00,stroke:#333
+```
+> [!NOTE]
+> 出典: 『Software Design 2025年12月号』p.130 木下雄一郎 著 「AI時代のコードレビュー」掲載の図を参考に作成。
+
+
+## Dependabot PR を自動マージする流れ
+
+Dependabot が立てた PR を「パッチ更新かどうか」で分け、パッチ更新は CI 通過後に自動マージ、それ以外は手動マージする構成です。
+
+1. **Dependabot が PR を作成**  
+   **Dependabot**（`.github/dependabot.yml`）が日次で **bundler**（Gemfile）・**npm**（package.json）・**github-actions** を監視し、更新可能なら PR を開きます。同時に開く PR は各エコシステムあたり最大 10 本（`open-pull-requests-limit: 10`）です。
+
+2. **パッチ更新かどうかの判定**  
+   **Dependabot auto-merge**（`.github/workflows/dependabot-auto-merge.yml`）が、PR 作成時に `dependabot/fetch-metadata` で更新タイプ（semver-patch / minor / major など）を取得します。
+
+3. **パッチ更新の場合**  
+   - **CI がパス** … `enable-auto-merge` ジョブが `gh pr merge --auto --merge` で auto-merge を有効化しています。続いて **CI** が走り、CI が成功すると `workflow_run` で **merge-when-ready** ジョブが動き、同じブランチの Dependabot パッチ PR で auto-merge が有効なら **即マージ**します（[github-actions.md](github-actions.md) の「Dependabot auto-merge」参照）。  
+   - **CI が失敗** … auto-merge は有効のままですが、マージ条件（CI 成功）を満たさないためマージされません。原因を確認して修正し、CI を通したうえで **手動マージ**するか、Dependabot の再実行を待ちます。
+
+4. **パッチ更新ではない場合（minor / major など）**  
+   auto-merge は有効化されません。CI は通常どおり走るので、結果を確認したうえで **手動マージ**します。破壊的変更や仕様変更の可能性があるため、意図的に自動マージの対象外にしています。
+
+フローチャートでは、上記の「Dependabot PR → パッチか？ → パッチなら CI パスで自動マージ／失敗ならデバッグ→手動マージ」「パッチでなければ CI 後に手動マージ」という流れを整理しています。
+
+```mermaid
+graph LR
+    Start([Dependabot PR]) --> IsPatch{パッチ更新?}
+    
+    %% パッチ更新の場合
+    IsPatch -- Yes --> IsPass{CIテストパス?}
+    IsPass -- Yes --> AutoMerge([自動マージ])
+    IsPass -- No --> Debug[デバッグ]
+    Debug --> ManualMerge([手動マージ])
+
+    %% パッチ更新ではない場合
+    IsPatch -- No --> CITest[CIテスト]
+    CITest --> ManualMerge
+
+    %% スタイリング（前回と統一）
+    style Start fill:#f9f,stroke:#333
+    style IsPatch fill:#fff4dd,stroke:#d4a017
+    style IsPass fill:#fff4dd,stroke:#d4a017
+    style CITest fill:#f0f8ff,stroke:#007bff
+    style Debug fill:#f0f8ff,stroke:#007bff
+    style AutoMerge fill:#d4edda,stroke:#28a745
+    style ManualMerge fill:#d4edda,stroke:#28a745
+```
+
+
+
+
 [^1]:CVE は「Common Vulnerabilities and Exposures」の略で、公開されたセキュリティ脆弱性に一意の ID を付けて管理するための共通番号・リストです。
