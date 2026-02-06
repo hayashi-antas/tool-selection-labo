@@ -109,9 +109,9 @@ class User < ApplicationRecord
 end
 ```
 
-## レート制限API（Rails 8新機能）
+## レート制限API（Rails 8新機能・組み込み）
 
-Rails 8.0で導入されたビルトインレート制限は、ブルートフォース攻撃や資格情報スタッフィング攻撃を防止します [^26][^29][^7]。
+Rails 8.0で**フレームワークに組み込み**されたレート制限APIにより、外部gemなしでブルートフォース攻撃や資格情報スタッフィング攻撃を防止できます [^26][^29][^7]。
 
 ### 基本的な使用方法
 
@@ -190,6 +190,26 @@ class UsersController < ApplicationController
   end
 end
 ```
+
+### Params.expect（Rails 8新機能）
+
+Rails 8.0で追加された`params.expect`は、`require`と`permit`を一つの呼び出しにまとめ、**期待するパラメータ構造を宣言的に指定**します。型や構造が期待と異なる場合に 500 ではなく **400 Bad Request** を返すため、不正リクエストを早い段階で弾けます [^35][^36]。
+
+```ruby
+# 従来: require + permit
+params.require(:book).permit(:title, :author, :isbn)
+
+# Rails 8: expect（必須ルートキーと許可属性を一括指定）
+params.expect(book: [ :title, :author, :isbn, :publisher, :page ])
+```
+
+ネストした配列（例: コメントの配列）は二重括弧で指定します。
+
+```ruby
+params.expect(post: [:title, comments: [[:body]]])
+```
+
+スカラー値のみ必須にしたい場合は`params.expect(:id)`のようにキーだけを渡します。本アプリでは書籍・メモ・画像・ユーザータグなどのコントローラで`params.expect`を採用しています。
 
 ## Active Record暗号化（Rails 7以降）
 
@@ -299,6 +319,16 @@ Rails.application.config.filter_parameters += [
 
 フィルタされたパラメータは`[FILTERED]`として出力されます。
 
+## ReDoS対策（Rails 8）
+
+ReDoS（Regular Expression Denial of Service）は、意図的に悪用しやすい正規表現と入力の組み合わせでマッチングに極端に時間がかかり、サーバーリソースを枯渇させる攻撃です。Rails 8では**正規表現のマッチングにデフォルトで 1 秒のタイムアウト**（`Regexp.timeout`）を設定し、バックトラック爆発を抑止します [^37][^38]。
+
+- **デフォルト値**: `Regexp.timeout = 1`（秒）。アプリ側で未設定の場合に適用される。
+- **既存設定の尊重**: アプリケーションで既に`Regexp.timeout`を設定している場合は上書きしない。
+- **Ruby 3.2以降**: 言語側のタイムアウト機能を利用。Rails はそのデフォルトをセキュアな値に設定する役割を担う。
+
+MIME パースや Cookie 解析など、過去にも ReDoS に由来する CVE が修正されており、このデフォルト設定はそれらを補う防御層となります [^38]。
+
 ## その他のセキュリティ機能
 
 ### Host Authorization
@@ -329,7 +359,7 @@ end
    ```ruby
    @project = current_user.projects.find(params[:id])
    ```
-3. **正規表現の注意**: Rubyでは`^`と`$`ではなく`\A`と`\z`を使用
+3. **正規表現の注意**: Rubyでは`^`と`$`ではなく`\A`と`\z`を使用。Rails 8の ReDoS 対策（`Regexp.timeout`）とあわせて、悪意のある入力によるマッチングの暴走を防ぐ。
    ```ruby
    /\Ahttps?:\/\/[^\n]+\z/i  # 安全
    /^https?:\/\/[^\n]+$/i    # 危険
@@ -342,11 +372,12 @@ Rails 8.1.2は以下のセキュリティ機能を標準で備えています：
 
 | カテゴリ | 機能 |
 |---------|------|
-| 認証・認可 | 認証ジェネレータ、Strong Parameters |
-| リクエスト保護 | CSRF対策、レート制限 |
+| 認証・認可 | 認証ジェネレータ、Strong Parameters、Params.expect（Rails 8） |
+| リクエスト保護 | CSRF対策、組み込みレート制限（Rails 8） |
 | インジェクション対策 | SQLインジェクション、XSS自動エスケープ |
 | セッション | 暗号化Cookie、セッション固定対策 |
 | データ保護 | Active Record暗号化、ログフィルタリング |
+| 耐障害・DoS | ReDoS対策（Regexp.timeout、Rails 8） |
 | ヘッダー | CSP、HTTPセキュリティヘッダー |
 | 静的解析 | Brakeman |
 
@@ -356,42 +387,50 @@ Rails 8.1.2は以下のセキュリティ機能を標準で備えています：
 
 ## References
 
-1. [Kaigi on Rails 2024に参加してきました！ - あたまがきんに君](https://note.aiken-to-osanpo.dev/n/n10260c24a15e) - デプロイ時に長時間非同期処理が残ってしまっている場合に今までは指差し確認を行なっていたが、ジョブの中断・再開処理を実装して解決したという発表です ...
+[^1]: [Kaigi on Rails 2024に参加してきました！ - あたまがきんに君](https://note.aiken-to-osanpo.dev/n/n10260c24a15e) - デプロイ時に長時間非同期処理が残ってしまっている場合に今までは指差し確認を行なっていたが、ジョブの中断・再開処理を実装して解決したという発表です ...
 
-6. [Rails 8.1 beta: Key security features for employers](https://www.linkedin.com/posts/sorcersawan_railssecurity-applicationsecurity-rubyonrails-activity-7330865218740191232-lD5E) - The anticipated Rails 8.1 beta brings several features that forward-thinking employers are asking ab...
+[^6]: [Rails 8.1 beta: Key security features for employers](https://www.linkedin.com/posts/sorcersawan_railssecurity-applicationsecurity-rubyonrails-activity-7330865218740191232-lD5E) - The anticipated Rails 8.1 beta brings several features that forward-thinking employers are asking ab...
 
-7. [The State of Security in Rails 8](https://www.rubyevents.org/talks/the-state-of-security-in-rails-8) - - Rate Limiting Feature: Rails now supports built-in rate limiting to guard against credential stuff...
+[^7]: [The State of Security in Rails 8](https://www.rubyevents.org/talks/the-state-of-security-in-rails-8) - - Rate Limiting Feature: Rails now supports built-in rate limiting to guard against credential stuff...
 
-8. [Rails セキュリティガイド](https://railsguides.jp/v8.0/security.html) - XSSやインジェクションによる攻撃を防ぐために、アプリケーションのレスポンスヘッダーに Content-Security-Policy （CSP）を定義することが推奨されています。Railsでは、 ....
+[^8]: [Rails セキュリティガイド](https://railsguides.jp/v8.0/security.html) - XSSやインジェクションによる攻撃を防ぐために、アプリケーションのレスポンスヘッダーに Content-Security-Policy （CSP）を定義することが推奨されています。Railsでは、 ....
 
-10. [Unlock Faster Web Development: Rails 8 Still Leads](https://reinteractive.com/articles/upgrades-and-development/rails-8-modern-web-framework) - Security is paramount in Rails 8, with built-in features and supporting gems that minimise vulnerabi...
+[^10]: [Unlock Faster Web Development: Rails 8 Still Leads](https://reinteractive.com/articles/upgrades-and-development/rails-8-modern-web-framework) - Security is paramount in Rails 8, with built-in features and supporting gems that minimise vulnerabi...
 
-11. [【2025年版】Rails 8とLaravel 12のセキュリティ実装比較](https://enjoydarts.blog/archives/767) - XSS対策の実装 Rails. CSRF対策の実装 Rails 8 Rails 8では、CSRF対策がデフォルトで有効化されており、 ApplicationController で自動的に適用されます...
+[^11]: [【2025年版】Rails 8とLaravel 12のセキュリティ実装比較](https://enjoydarts.blog/archives/767) - XSS対策の実装 Rails. CSRF対策の実装 Rails 8 Rails 8では、CSRF対策がデフォルトで有効化されており、 ApplicationController で自動的に適用されます...
 
-12. [Rails 8 & Rails 8.1: features to speed up your release cycle](https://rubyroidlabs.com/blog/2025/11/rails-8-8-1-new-features/) - A complete testing suite. A powerful system for talking to your database. A way to send emails. A se...
+[^12]: [Rails 8 & Rails 8.1: features to speed up your release cycle](https://rubyroidlabs.com/blog/2025/11/rails-8-8-1-new-features/) - A complete testing suite. A powerful system for talking to your database. A way to send emails. A se...
 
-13. [Built-in Authentication in Rails 8.0 – A Technical Deep Dive ...](https://andriifurmanets.com/blogs/built-in-authentication-in-rails) - Rails 8.0 includes an authentication generator that scaffolds a basic email/password auth setup. The...
+[^13]: [Built-in Authentication in Rails 8.0 – A Technical Deep Dive ...](https://andriifurmanets.com/blogs/built-in-authentication-in-rails) - Rails 8.0 includes an authentication generator that scaffolds a basic email/password auth setup. The...
 
-16. [Rails CSRF Protection: Best Practices Checklist - USEO](https://useo.tech/ruby-tech/rails-csrf-protection-best-practices-checklist/) - Rails comes with built-in CSRF (Cross-Site Request Forgery) protection, but you can further customis...
+[^16]: [Rails CSRF Protection: Best Practices Checklist - USEO](https://useo.tech/ruby-tech/rails-csrf-protection-best-practices-checklist/) - Rails comes with built-in CSRF (Cross-Site Request Forgery) protection, but you can further customis...
 
-17. [Active Record Encryption](https://guides.rubyonrails.org/active_record_encryption.html) - Active Record supports application-level encryption by allowing you to declare which attributes shou...
+[^17]: [Active Record Encryption](https://guides.rubyonrails.org/active_record_encryption.html) - Active Record supports application-level encryption by allowing you to declare which attributes shou...
 
-18. [ActionController::StrongParameters - Rails API](https://api.rubyonrails.org/v7.2/classes/ActionController/StrongParameters.html) - It provides an interface for protecting attributes from end-user assignment. This makes Action Contr...
+[^18]: [ActionController::StrongParameters - Rails API](https://api.rubyonrails.org/v7.2/classes/ActionController/StrongParameters.html) - It provides an interface for protecting attributes from end-user assignment. This makes Action Contr...
 
-20. [Active Record Encryptionを使って属性値を暗号化するメモ](https://madogiwa0124.hatenablog.com/entry/2022/02/20/153314) - Active Record Encryptionは、Rails 7から導入されたActive Recordの新機能です。 特定の属性値をシンプルなDSLで暗号化して扱うことができます。
+[^20]: [Active Record Encryptionを使って属性値を暗号化するメモ](https://madogiwa0124.hatenablog.com/entry/2022/02/20/153314) - Active Record Encryptionは、Rails 7から導入されたActive Recordの新機能です。 特定の属性値をシンプルなDSLで暗号化して扱うことができます。
 
-22. [A Complete Guide to Ruby on Rails Security Measures 🛡️](https://railsdrop.com/2025/05/11/a-complete-guide-to-ruby-on-rails-security-measures/) - In this post, we'll walk through essential Rails security measures, tackle real-world threats, and s...
+[^22]: [A Complete Guide to Ruby on Rails Security Measures 🛡️](https://railsdrop.com/2025/05/11/a-complete-guide-to-ruby-on-rails-security-measures/) - In this post, we'll walk through essential Rails security measures, tackle real-world threats, and s...
 
-24. [Deep Dive Into Rails ActionController Strong Parameters](https://blog.saeloun.com/2025/02/18/deep-dive-into-rails-action-controller-strong-parameters/) - Strong parameters allow us to explicitly permit and require specific attributes in the controller, p...
+[^24]: [Deep Dive Into Rails ActionController Strong Parameters](https://blog.saeloun.com/2025/02/18/deep-dive-into-rails-action-controller-strong-parameters/) - Strong parameters allow us to explicitly permit and require specific attributes in the controller, p...
 
-26. [Rails 8.0 built-in Rate Limiting](https://global.moneyforward-dev.jp/2024/12/17/rails-8-0-built-in-rate-limiting/) - How It Works. Rails built-in Rate Limiting uses the application's caching layer to track request cou...
+[^26]: [Rails 8.0 built-in Rate Limiting](https://global.moneyforward-dev.jp/2024/12/17/rails-8-0-built-in-rate-limiting/) - How It Works. Rails built-in Rate Limiting uses the application's caching layer to track request cou...
 
-27. [Configuring CSP Nonce in Ruby on Rails 7/8](https://railsdrop.com/2025/09/27/configuring-csp-nonce-in-ruby-on-rails-7-8/) - Content Security Policy (CSP) adds a powerful security layer to prevent Cross Site Scripting (XSS) a...
+[^27]: [Configuring CSP Nonce in Ruby on Rails 7/8](https://railsdrop.com/2025/09/27/configuring-csp-nonce-in-ruby-on-rails-7-8/) - Content Security Policy (CSP) adds a powerful security layer to prevent Cross Site Scripting (XSS) a...
 
-28. [Preparing for Rails 8? Learn Brakeman, the Built-in ...](https://www.youtube.com/watch?v=MXaR-RV35sI) - In this video, we'll dive into Brakeman (available at https://brakemanscanner.org/), a powerful stat...
+[^28]: [Preparing for Rails 8? Learn Brakeman, the Built-in ...](https://www.youtube.com/watch?v=MXaR-RV35sI) - In this video, we'll dive into Brakeman (available at https://brakemanscanner.org/), a powerful stat...
 
-29. [Rails 8 introduces a built-in rate limiting API](https://www.bigbinary.com/blog/rails-8-rate-limiting-api) - Rails 8.0 brings a native rate-limiting feature to the Action Controller, streamlining the process a...
+[^29]: [Rails 8 introduces a built-in rate limiting API](https://www.bigbinary.com/blog/rails-8-rate-limiting-api) - Rails 8.0 brings a native rate-limiting feature to the Action Controller, streamlining the process a...
 
-31. [Adding SimpleCov & Brakeman To Our Application For CI ...](https://railsdrop.com/2025/05/05/rails-8-setup-simplecov-brakeman-for-test-coverage-security/) - In this post, we'll walk through integrating two powerful tools into your Rails 8 app: SimpleCov: fo...
+[^31]: [Adding SimpleCov & Brakeman To Our Application For CI ...](https://railsdrop.com/2025/05/05/rails-8-setup-simplecov-brakeman-for-test-coverage-security/) - In this post, we'll walk through integrating two powerful tools into your Rails 8 app: SimpleCov: fo...
 
-34. [Rails 8.0 adds Brakeman](https://www.shakacode.com/blog/rails-8-adds-brakeman-by-default/) - Rails 8 adds Brakeman by default to new apps. Brakeman acts as a security shield for your Rails proj...
+[^34]: [Rails 8.0 adds Brakeman](https://www.shakacode.com/blog/rails-8-adds-brakeman-by-default/) - Rails 8 adds Brakeman by default to new apps. Brakeman acts as a security shield for your Rails proj...
+
+[^35]: [Filter and Require Params in Rails 8 with Parameters#expect](https://blog.saeloun.com/2024/12/10/rails-8-adds-parametersexpect-to-safely-filter-and-require-params/) - Rails 8 adds params.expect to combine require and permit; returns 400 for invalid structure.
+
+[^36]: [Expecting Perfection from ActionController::Parameters](https://joshfrankel.me/blog/expecting-perfection-from-action-controller-parameters/) - params.expect usage and type/structure validation.
+
+[^37]: [This Week in Rails - Default Regexp.timeout and more!](https://rubyonrails.org/2024/11/1/this-week-in-rails) - Rails 8 sets Regexp.timeout to 1 second by default for ReDoS mitigation.
+
+[^38]: [Rails 8.0 Release Notes](https://guides.rubyonrails.org/8_0_release_notes.html) - Regexp timeout default; ReDoS-related CVE history (e.g. MIME parsing, cookie parsing).
